@@ -47,10 +47,10 @@ import math
 # close price
 # 5d*3v -> sq = 0.0099 - hi, lo, cl
 
-inputs = 15
+inputs = 30
 memBlocks = inputs*2+1
 stochPeriod = 5
-maxtries = 500
+maxtries =  0
 specString = str(inputs)+", 1, 1, 1"
 for memoryBlock in range(memBlocks):
     specString += "\n" + str(memoryBlock) + ", 1, 1, 1"
@@ -58,24 +58,33 @@ for memoryBlock in range(memBlocks):
     specString += "\n" + str(memoryBlock) + ", " + str(memoryBlock) + ", 2"
 specString += "\n0, " + str(memBlocks)
 print specString
-net = LSTM_g.LSTM_g(specString)
+# netT = hi-lo
+netT = LSTM_g.LSTM_g(specString)
+# netM = (hi+lo+cl)/3
+netM = LSTM_g.LSTM_g(specString)
+# netC = cl
+netC = LSTM_g.LSTM_g(specString)
 #print net.toString(True)
 
 with open('EURUSD1440.csv', 'rb') as csvfile:
-    reader = csv.reader(csvfile, delimiter=',')
-    prevresult = 0.0
-    prevclose = 0.0
-    args = deque([])
-    errsum = 0.0
-    numtries = 0
-    volseq = deque([])
-    for row in reader:
-        #print ' '.join(row)
-        op = float(row[2]) * 0.5
-        hi = float(row[3]) * 0.5
-        lo = float(row[4]) * 0.5
-        cl = float(row[5]) * 0.5
-        vol = float(row[6])
+    with open('netresult_30d.csv', 'wb') as outfile:
+        reader = csv.reader(csvfile, delimiter=',')
+        writer = csv.writer(outfile, delimiter=';')
+        writer.writerow(['Date', 'Open', 'High', 'Low', 'Close', 'Predicted Hi-Lo', 'Predicted Median Price', 'Predicted Close'])
+        resultT = 0.0
+        resultM = 0.0
+        resultC = 0.0
+        args = deque([])
+        errsum = 0.0
+        numtries = 0
+        volseq = deque([])
+        for row in reader:
+            date = row[0]
+            op = float(row[2]) * 0.5
+            hi = float(row[3]) * 0.5
+            lo = float(row[4]) * 0.5
+            cl = float(row[5]) * 0.5
+            vol = float(row[6])
         #volseq.append(vol)
         #while len(volseq) > stochPeriod:
         #    volseq.popleft()
@@ -89,25 +98,28 @@ with open('EURUSD1440.csv', 'rb') as csvfile:
         #volStoch = 0.0
         #if volHi != volLo:
         #    volStoch = (vol - volLo) / (volHi - volLo)
-        if prevresult != 0.0:
-            target = cl
-            error = net.getError([target])
-            net.learn([target])
-            numtries += 1
-            errsum += (prevresult - target)**2
-            print error, prevresult - target, math.sqrt(errsum/numtries)
-        #args.append(op)
-        args.append(hi)
-        args.append(lo)
-        args.append(cl)
-        #args.append(vol)
-        #args.append(hi-lo)
-        #args.append(volStoch)
-        while len(args) > inputs:
-            args.popleft()
-        if len(args) == inputs:
-            result = net.step(args)
-            prevresult = result[0]
-        prevclose = cl
-        if maxtries != 0 and numtries >= maxtries:
-            break
+            if resultT != 0.0 and resultM != 0.0 and resultC != 0.0:
+                writer.writerow([date, op*2.0, hi*2.0, lo*2.0, cl*2.0, resultT*2.0, resultM*2.0, resultC*2.0])
+                target = cl
+                #error = netC.getError([target])
+                netT.learn([hi-lo])
+                netM.learn([(hi+lo+cl)/3.0])
+                netC.learn([cl])
+                numtries += 1
+                #errsum += (prevresult - target)**2
+                #print error, prevresult - target, math.sqrt(errsum/numtries)
+                print numtries
+            
+            args.append(hi)
+            args.append(lo)
+            args.append(cl)
+            
+            while len(args) > inputs:
+                args.popleft()
+            if len(args) == inputs:
+                resultT = netT.step(args)[0]
+                resultM = netM.step(args)[0]
+                resultC = netC.step(args)[0]
+
+            if maxtries != 0 and numtries >= maxtries:
+                break
