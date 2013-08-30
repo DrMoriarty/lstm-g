@@ -314,11 +314,12 @@ class LSTM_g:
         errorProj, errorResp = {}, {}
 
 #Eq. 10
-        for j in range(self.numUnits - self.numOutputs, self.numUnits):
-            errorResp[j] = targets[j + self.numOutputs - self.numUnits] - self.activation[j]
+        nonOutputs = self.numUnits - self.numOutputs
+        for j in range(nonOutputs, self.numUnits):
+            errorResp[j] = targets[j - nonOutputs] - self.activation[j]
 
 #error responsibilities are calculated in the reverse order of activation
-        for j in reversed(range(self.numInputs, self.numUnits - self.numOutputs)):
+        for j in reversed(range(self.numInputs, nonOutputs)):
 
 #preparation for their sums in Eqs. 21 and 22
 #gating responsibility will be temporarily stored in errorResp, since it is only used in Eq. 23
@@ -345,7 +346,7 @@ class LSTM_g:
         for j, i in self.trace:
 
 #if j is not an output unit
-            if j < self.numUnits - self.numOutputs:
+            if j < nonOutputs:
 
 #first term in Eq. 24
                 self.weight[j, i] += learningRate * errorProj[j] * self.trace[j, i]

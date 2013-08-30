@@ -4,6 +4,7 @@ import LSTM_g
 import csv
 from collections import deque
 import math
+import time
 
 #the network architecture used in the first Distracted Sequence Recall experiment
 #numInputs is 11 instead of 10 because the last "input unit" is a bias unit
@@ -62,10 +63,14 @@ import math
 # in=6 mb=24 -> sq = 0.0122 0117 0132 0130 0144 | 01290
 # in=6 mb=25 -> sq = 0.0105 0107 0144 0124 0130 | 01220
 
-inputs = 30
+#time in=15 maxtries = 10 s+l time = 16.46 - 16.64
+# s-l time = 4.26 - 4.28
+# 16.40 - 16.46
+
+inputs = 15
 memBlocks = inputs*2+1
 stochPeriod = 5
-maxtries =  0
+maxtries =  10
 specString = str(inputs)+", 1, 1, 1"
 for memoryBlock in range(memBlocks):
     specString += "\n" + str(memoryBlock) + ", 1, 1, 1"
@@ -81,8 +86,10 @@ netM = LSTM_g.LSTM_g(specString)
 netC = LSTM_g.LSTM_g(specString)
 #print net.toString(True)
 
+t1 = time.clock()
+
 with open('EURUSD1440.csv', 'rb') as csvfile:
-    with open('netresult_30d.csv', 'wb') as outfile:
+    with open('netresult_test.csv', 'wb') as outfile:
         reader = csv.reader(csvfile, delimiter=',')
         writer = csv.writer(outfile, delimiter=';')
         writer.writerow(['Date', 'Open', 'High', 'Low', 'Close', 'Predicted Hi-Lo', 'Predicted Median Price', 'Predicted Close'])
@@ -92,7 +99,6 @@ with open('EURUSD1440.csv', 'rb') as csvfile:
         args = deque([])
         errsum = 0.0
         numtries = 0
-        volseq = deque([])
         for row in reader:
             date = row[0]
             op = float(row[2]) * 0.5
@@ -100,19 +106,6 @@ with open('EURUSD1440.csv', 'rb') as csvfile:
             lo = float(row[4]) * 0.5
             cl = float(row[5]) * 0.5
             vol = float(row[6])
-        #volseq.append(vol)
-        #while len(volseq) > stochPeriod:
-        #    volseq.popleft()
-        #volHi = vol
-        #volLo = vol
-        #for vv in volseq:
-        #    if volHi < vv:
-        #        volHi = vv
-        #    if volLo > vv:
-        #        volLo = vv
-        #volStoch = 0.0
-        #if volHi != volLo:
-        #    volStoch = (vol - volLo) / (volHi - volLo)
             if resultT != 0.0 and resultM != 0.0 and resultC != 0.0:
                 writer.writerow([date, op*2.0, hi*2.0, lo*2.0, cl*2.0, resultT*2.0, resultM*2.0, resultC*2.0])
                 target = cl
@@ -123,7 +116,7 @@ with open('EURUSD1440.csv', 'rb') as csvfile:
                 numtries += 1
                 #errsum += (prevresult - target)**2
                 #print error, prevresult - target, math.sqrt(errsum/numtries)
-                print numtries
+                print numtries, len(netT.trace), netT.numUnits
             
             args.append(hi)
             args.append(lo)
@@ -138,3 +131,6 @@ with open('EURUSD1440.csv', 'rb') as csvfile:
 
             if maxtries != 0 and numtries >= maxtries:
                 break
+
+t2 = time.clock()
+print round(t2-t1, 3)            
