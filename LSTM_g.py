@@ -256,8 +256,8 @@ class LSTM_g:
 #cached self-connection gain
             self.oldGain[j] = self.gain(j, j)
 
-            for l, i in self.trace:
-                if l == j:
+            for i in range(0, self.numUnits):
+                if (j, i) in self.trace:
                     self.oldGain[j, i] = self.gain(j, i)
 
 #oldActivation's first parameter is the unit denoting the "time" the value is cached
@@ -270,8 +270,8 @@ class LSTM_g:
             bias = 0
 
 #loops through units with connections to j (i != j for traces) for the second term in Eq. 15
-            for l, i in self.trace:
-                if l == j:
+            for i in range(0, self.numUnits):
+                if (j, i) in self.trace:
 
 #if j, i is a bias connection, activation uses the bias term and the trace is specially defined
                     if (j, j) in self.weight and i < self.numInputs and (j, i) not in self.gater:
@@ -326,9 +326,10 @@ class LSTM_g:
             errorProj[j] = errorResp[j] = 0
 
 #summation in Eq. 21, looping through P_j (Eq. 19)
-            for k, l in self.trace:
-                if l == j and j < k:
+            for k in range(j+1, self.numUnits):
+                if (k, j) in self.trace:
                     errorProj[j] += errorResp[k] * self.oldGain[k, j] * self.weight[k, j]
+
 
             errorProj[j] *= self.actFunc(self.oldState[j], True)
 
@@ -352,9 +353,9 @@ class LSTM_g:
                 self.weight[j, i] += learningRate * errorProj[j] * self.trace[j, i]
 
 #second term in Eq. 24 (this is another way to loop through G_j, when i is fixed)
-                for (l, m, k), e in self.extendedTrace.items():
-                    if l == j and m == i:
-                        self.weight[j, i] += learningRate * errorResp[k] * e
+                for k in range(0, self.numUnits):
+                    if (j, i, k) in self.extendedTrace:
+                        self.weight[j, i] += learningRate * errorResp[k] * self.extendedTrace[j, i, k]
 
 #else Eq. 13, since j is an output unit
             else:

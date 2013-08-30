@@ -65,9 +65,13 @@ import time
 
 #time in=15 maxtries = 10 s+l time = 16.46 - 16.64
 # s-l time = 4.26 - 4.28
-# 16.40 - 16.46
+# 16.40 - 16.46 | 25.66
+# | 14.272 - 14.49
+# | 12.88 - 13.3
+# | 11.88 - 12.38
+# | 10.9 - 11.2
 
-inputs = 15
+inputs = 60
 memBlocks = inputs*2+1
 stochPeriod = 5
 maxtries =  10
@@ -77,14 +81,12 @@ for memoryBlock in range(memBlocks):
 for memoryBlock in range(memBlocks):
     specString += "\n" + str(memoryBlock) + ", " + str(memoryBlock) + ", 2"
 specString += "\n0, " + str(memBlocks)
-print specString
-# netT = hi-lo
-netT = LSTM_g.LSTM_g(specString)
+#print specString
 # netM = (hi+lo+cl)/3
 netM = LSTM_g.LSTM_g(specString)
 # netC = cl
 netC = LSTM_g.LSTM_g(specString)
-#print net.toString(True)
+#print netC.toString(False)
 
 t1 = time.clock()
 
@@ -92,8 +94,7 @@ with open('EURUSD1440.csv', 'rb') as csvfile:
     with open('netresult_test.csv', 'wb') as outfile:
         reader = csv.reader(csvfile, delimiter=',')
         writer = csv.writer(outfile, delimiter=';')
-        writer.writerow(['Date', 'Open', 'High', 'Low', 'Close', 'Predicted Hi-Lo', 'Predicted Median Price', 'Predicted Close'])
-        resultT = 0.0
+        writer.writerow(['Date', 'Open', 'High', 'Low', 'Close', 'Predicted Median Price', 'Predicted Close'])
         resultM = 0.0
         resultC = 0.0
         args = deque([])
@@ -106,17 +107,16 @@ with open('EURUSD1440.csv', 'rb') as csvfile:
             lo = float(row[4]) * 0.5
             cl = float(row[5]) * 0.5
             vol = float(row[6])
-            if resultT != 0.0 and resultM != 0.0 and resultC != 0.0:
-                writer.writerow([date, op*2.0, hi*2.0, lo*2.0, cl*2.0, resultT*2.0, resultM*2.0, resultC*2.0])
-                target = cl
+            if resultM != 0.0 or resultC != 0.0:
+                writer.writerow([date, op*2.0, hi*2.0, lo*2.0, cl*2.0, resultM*2.0, resultC*2.0])
+                target = (hi+lo+cl)/3.0
                 #error = netC.getError([target])
-                netT.learn([hi-lo])
-                netM.learn([(hi+lo+cl)/3.0])
-                netC.learn([cl])
+                netM.learn([target])
+                #netC.learn([cl])
                 numtries += 1
-                #errsum += (prevresult - target)**2
-                #print error, prevresult - target, math.sqrt(errsum/numtries)
-                print numtries, len(netT.trace), netT.numUnits
+                errsum += (resultM - target)**2
+                print resultM - target, math.sqrt(errsum/numtries)
+                #print numtries
             
             args.append(hi)
             args.append(lo)
@@ -125,9 +125,8 @@ with open('EURUSD1440.csv', 'rb') as csvfile:
             while len(args) > inputs:
                 args.popleft()
             if len(args) == inputs:
-                resultT = netT.step(args)[0]
                 resultM = netM.step(args)[0]
-                resultC = netC.step(args)[0]
+                #resultC = netC.step(args)[0]
 
             if maxtries != 0 and numtries >= maxtries:
                 break
