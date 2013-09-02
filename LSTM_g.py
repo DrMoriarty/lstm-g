@@ -1,6 +1,7 @@
 #comments assume unfamiliarity with Python 2.7, and can obviously be removed
 
 import math, random, os, threading
+
 class LSTM_g:
 
 #the activation function used is the logistic sigmoid, with range (0, 1) and a neat derivative
@@ -10,6 +11,12 @@ class LSTM_g:
         value = 1 / (1 + math.exp(-s - bias))
         if derivative:
             value *= 1 - value
+        return value
+
+#the optimized version    
+    def actFunc2(self, s):
+        value = 1 / (1 + math.exp(-s))
+        value *= 1 - value
         return value
 
 #Eq. 14 (returns 0 if no w_ji to account for nonexistent self-connections (Eqs. 15, 17, and 18))
@@ -31,8 +38,10 @@ class LSTM_g:
 
 #for all dictionary keys (that have the properties checked for below)
 #this is a common technique in the code, which is slow but simple
-        for l, a in self.gater:
-            if l == k and a != k and j == self.gater[k, a]:
+#        for l, a in self.gater:
+#            if l == k and a != k and j == self.gater[k, a]:
+        for a in xrange(0, self.numUnits):
+            if a != k and (k, a) in self.gater and j == self.gater[k, a]:
                 term += self.weight[k, a] * self.oldActivation[k, a]
         return term
 
@@ -49,33 +58,37 @@ class LSTM_g:
 #assumes the states etc. are not included until they are seen
 #this is necessary because there are two types of lines with four parameters
         newNetwork = True
-
+        
 #args is the parameter list from each line after the first (the first is excluded by [1:])
         for args in specData[1:]:
 
 #if a two-parameter line (for states) is seen, the other optional lines are now expected
-            if len(args) < 3:
+            a0 = int(args[0])
+            largs = len(args)
+            if largs < 3:
+                a1 = float(args[1])
                 newNetwork = False
-                self.state[int(args[0])] = float(args[1])
-                self.activation[int(args[0])] = self.actFunc(self.state[int(args[0])], False)
+                self.state[a0] = a1
+                self.activation[a0] = self.actFunc(a1, False)
 
 #args[0] and args[1] are j and i respectively
+            a1 = int(args[1])
             if newNetwork:
-                self.weight[int(args[0]), int(args[1])] = float(args[2])
+                self.weight[a0, a1] = float(args[2])
 
 #gater associates a connection with its gating unit, or gater (but -1 means there is none)
                 if args[3] != "-1":
-                    self.gater[int(args[0]), int(args[1])] = int(args[3])
+                    self.gater[a0, a1] = int(args[3])
 
 #traces are unneeded for self-connections, and are initially 0
 #these will be overwritten if traces are specified
-                if args[0] != args[1]:
-                    self.trace[int(args[0]), int(args[1])] = 0
+                if a0 != a1:
+                    self.trace[a0, a1] = 0
 
-            elif len(args) > 3:
-                self.extendedTrace[int(args[0]), int(args[1]), int(args[2])] = float(args[3])
-            elif len(args) > 2:
-                self.trace[int(args[0]), int(args[1])] = float(args[2])
+            elif largs > 3:
+                self.extendedTrace[a0, a1, int(args[2])] = float(args[3])
+            elif largs > 2:
+                self.trace[a0, a1] = float(args[2])
 
 #if the optional lines were omitted, states, activations, and extended traces are initially 0
         if newNetwork:
@@ -83,8 +96,8 @@ class LSTM_g:
                 self.state[j] = self.activation[j] = 0
 
 #the combinations of j, i, and k that extended traces are defined for are deduced from connections
-                for k, a in self.gater:
-                    if j < k and j == self.gater[k, a]:
+                for (k, a), j2 in self.gater.iteritems():
+                    if j < k and j == j2:
                         self.extendedTrace[j, i, k] = 0
 
 #units start from 0, so the number of units is one more than the state dictionary's largest key
@@ -143,13 +156,13 @@ class LSTM_g:
         specData[:] = [specData[0][:2]]
 
 #connections to output units
-        for outputUnit in range(numUnits - numOutputs, numUnits):
+        for outputUnit in xrange(numUnits - numOutputs, numUnits):
 
 #connections from input units
             if inputToOutput == "1":
 
 #this range has one parameter, giving a list of values from 0 to lastInput - 1 in steps of 1
-                for inputUnit in range(lastInput):
+                for inputUnit in xrange(lastInput):
 
                     addConnection(outputUnit, inputUnit)
 
@@ -163,14 +176,14 @@ class LSTM_g:
 
 #connections from input units, with the input gate gating the memory cell input
             if receiveInput == "1":
-                for inputUnit in range(lastInput):
+                for inputUnit in xrange(lastInput):
                     for unit in [inputGate, forgetGate, outputGate]:
                         addConnection(unit, inputUnit)
                     addConnection(memoryCell, inputUnit, inputGate)
 
 #connections to output units, all gated by the output gate
             if sendToOutput == "1":
-                for outputUnit in range(numUnits - numOutputs, numUnits):
+                for outputUnit in xrange(numUnits - numOutputs, numUnits):
                     addConnection(outputUnit, memoryCell, outputGate)
 
 #biases for memory block units
@@ -244,7 +257,7 @@ class LSTM_g:
     def step(self, inputs):
 
 #input unit activations come directly from inputs
-        for j in range(self.numInputs):
+        for j in xrange(self.numInputs):
             self.activation[j] = inputs[j]
 
 #cached states are just the states copied from the last time step, but the others are cached below
@@ -256,7 +269,7 @@ class LSTM_g:
 #cached self-connection gain
             self.oldGain[j] = self.gain(j, j)
 
-            for i in range(0, self.numUnits):
+            for i in xrange(0, self.numUnits):
                 if (j, i) in self.trace:
                     self.oldGain[j, i] = self.gain(j, i)
 
@@ -270,7 +283,7 @@ class LSTM_g:
             bias = 0
 
 #loops through units with connections to j (i != j for traces) for the second term in Eq. 15
-            for i in range(0, self.numUnits):
+            for i in xrange(0, self.numUnits):
                 if (j, i) in self.trace:
 
 #if j, i is a bias connection, activation uses the bias term and the trace is specially defined
@@ -290,16 +303,16 @@ class LSTM_g:
 
 #Eq. 18 (True means the derivative of the activation function is used)
         for j, i, k in self.extendedTrace:
-            terms = self.actFunc(self.oldState[j], True) * self.trace[j, i] * self.theTerm(j, k)
+            terms = self.actFunc2(self.oldState[j]) * self.trace[j, i] * self.theTerm(j, k)
             self.extendedTrace[j, i, k] = self.oldGain[k] * self.extendedTrace[j, i, k] + terms
 
 #returns network output
-        return [self.activation[j] for j in range(self.numUnits - self.numOutputs, self.numUnits)]
+        return [self.activation[j] for j in xrange(self.numUnits - self.numOutputs, self.numUnits)]
 
 #cross-entropy gives an error difference between target values and the output units' activations
     def getError(self, targets):
         error = 0
-        for j in range(self.numUnits - self.numOutputs, self.numUnits):
+        for j in xrange(self.numUnits - self.numOutputs, self.numUnits):
             t, y = targets[j + self.numOutputs - self.numUnits], self.activation[j]
 
 #base 2 logarithms
@@ -313,50 +326,61 @@ class LSTM_g:
 #projected responsibility and (full) responsibility respectively
         errorProj, errorResp = {}, {}
 
+        # local variables for speed optimization        
+        numUnits = self.numUnits
+        activation = self.activation
+        theTerm = self.theTerm
+        actFunc = self.actFunc2
+        oldState = self.oldState
+        trace = self.trace
+        extendedTrace = self.extendedTrace
+        weight = self.weight
+        oldGain = self.oldGain
+        gater = self.gater
 #Eq. 10
-        nonOutputs = self.numUnits - self.numOutputs
-        for j in range(nonOutputs, self.numUnits):
-            errorResp[j] = targets[j - nonOutputs] - self.activation[j]
+        nonOutputs = numUnits - self.numOutputs
+        for j in xrange(nonOutputs, numUnits):
+            errorResp[j] = targets[j - nonOutputs] - activation[j]
 
-        sortedGater = sorted(self.gater)
+        sortedGater = sorted(gater)
 #error responsibilities are calculated in the reverse order of activation
-        for j in reversed(range(self.numInputs, nonOutputs)):
+        for j in reversed(xrange(self.numInputs, nonOutputs)):
 
 #preparation for their sums in Eqs. 21 and 22
 #gating responsibility will be temporarily stored in errorResp, since it is only used in Eq. 23
             errorProj[j] = errorResp[j] = 0
 
 #summation in Eq. 21, looping through P_j (Eq. 19)
-            for k in range(j+1, self.numUnits):
-                if (k, j) in self.trace:
-                    errorProj[j] += errorResp[k] * self.oldGain[k, j] * self.weight[k, j]
+            for k in xrange(j+1, numUnits):
+                if (k, j) in trace:
+                    errorProj[j] += errorResp[k] * oldGain[k, j] * weight[k, j]
 
-            errorProj[j] *= self.actFunc(self.oldState[j], True)
+            errorProj[j] *= actFunc(oldState[j])
 
 #summation in Eq. 22, looping through G_j (Eq. 20) and making sure no k is repeated
             lastK = 0
             for k, a in sortedGater:
-                if lastK < k and j < k and j == self.gater[k, a]:
+                if lastK < k and j < k and j == gater[k, a]:
                     lastK = k
-                    errorResp[j] += errorResp[k] * self.theTerm(j, k)
+                    errorResp[j] += errorResp[k] * theTerm(j, k)
 
 #Eq. 23, but the gating responsibility had not yet been multipled by the activation derivative
-            errorResp[j] = errorProj[j] + self.actFunc(self.oldState[j], True) * errorResp[j]
+            errorResp[j] = errorProj[j] + actFunc(oldState[j]) * errorResp[j]
 
 #Eq. 24
-        for j, i in self.trace:
+        for j, i in trace:
 
 #if j is not an output unit
             if j < nonOutputs:
 
 #first term in Eq. 24
-                self.weight[j, i] += learningRate * errorProj[j] * self.trace[j, i]
+                weight[j, i] += learningRate * errorProj[j] * trace[j, i]
 
 #second term in Eq. 24 (this is another way to loop through G_j, when i is fixed)
-                for k in range(0, self.numUnits):
-                    if (j, i, k) in self.extendedTrace:
-                        self.weight[j, i] += learningRate * errorResp[k] * self.extendedTrace[j, i, k]
+                for k in xrange(0, numUnits):
+                    if (j, i, k) in extendedTrace:
+                        weight[j, i] += learningRate * errorResp[k] * extendedTrace[j, i, k]
 
 #else Eq. 13, since j is an output unit
             else:
-                self.weight[j, i] += learningRate * errorResp[j] * self.trace[j, i]
+                weight[j, i] += learningRate * errorResp[j] * trace[j, i]

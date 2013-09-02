@@ -74,7 +74,7 @@ import cProfile
 
 def trainNet():
 
-    inputs = 15
+    inputs = 60
     memBlocks = inputs*2+1
     stochPeriod = 5
     maxtries =  10
