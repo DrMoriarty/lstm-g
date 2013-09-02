@@ -5,6 +5,7 @@ import csv
 from collections import deque
 import math
 import time
+import cProfile
 
 #the network architecture used in the first Distracted Sequence Recall experiment
 #numInputs is 11 instead of 10 because the last "input unit" is a bias unit
@@ -71,65 +72,73 @@ import time
 # | 11.88 - 12.38
 # | 10.9 - 11.2
 
-inputs = 60
-memBlocks = inputs*2+1
-stochPeriod = 5
-maxtries =  10
-specString = str(inputs)+", 1, 1, 1"
-for memoryBlock in range(memBlocks):
-    specString += "\n" + str(memoryBlock) + ", 1, 1, 1"
-for memoryBlock in range(memBlocks):
-    specString += "\n" + str(memoryBlock) + ", " + str(memoryBlock) + ", 2"
-specString += "\n0, " + str(memBlocks)
-#print specString
-# netM = (hi+lo+cl)/3
-netM = LSTM_g.LSTM_g(specString)
-# netC = cl
-netC = LSTM_g.LSTM_g(specString)
-#print netC.toString(False)
+def trainNet():
 
-t1 = time.clock()
+    inputs = 15
+    memBlocks = inputs*2+1
+    stochPeriod = 5
+    maxtries =  10
+    specList = []
+    specList.append("%d, 1, 1, 1" % inputs)
+    for memoryBlock in range(memBlocks):
+        specList.append("\n%d, 1, 1, 1" % memoryBlock)
+    for memoryBlock in range(memBlocks):
+        specList.append("\n%d, %d, 2" % (memoryBlock,  memoryBlock))
+    specList.append("\n0, %d" % memBlocks)
 
-with open('EURUSD1440.csv', 'rb') as csvfile:
-    with open('netresult_test.csv', 'wb') as outfile:
-        reader = csv.reader(csvfile, delimiter=',')
-        writer = csv.writer(outfile, delimiter=';')
-        writer.writerow(['Date', 'Open', 'High', 'Low', 'Close', 'Predicted Median Price', 'Predicted Close'])
-        resultM = 0.0
-        resultC = 0.0
-        args = deque([])
-        errsum = 0.0
-        numtries = 0
-        for row in reader:
-            date = row[0]
-            op = float(row[2]) * 0.5
-            hi = float(row[3]) * 0.5
-            lo = float(row[4]) * 0.5
-            cl = float(row[5]) * 0.5
-            vol = float(row[6])
-            if resultM != 0.0 or resultC != 0.0:
-                writer.writerow([date, op*2.0, hi*2.0, lo*2.0, cl*2.0, resultM*2.0, resultC*2.0])
-                target = (hi+lo+cl)/3.0
-                #error = netC.getError([target])
-                netM.learn([target])
-                #netC.learn([cl])
-                numtries += 1
-                errsum += (resultM - target)**2
-                print resultM - target, math.sqrt(errsum/numtries)
-                #print numtries
+    specString = ''.join(specList)
+    print specString
+    # netM = (hi+lo+cl)/3
+    netM = LSTM_g.LSTM_g(specString)
+    # netC = cl
+    # netC = LSTM_g.LSTM_g(specString)
+    #print netC.toString(False)
+
+    t1 = time.clock()
+
+    with open('EURUSD1440.csv', 'rb') as csvfile:
+        with open('netresult_test.csv', 'wb') as outfile:
+            reader = csv.reader(csvfile, delimiter=',')
+            writer = csv.writer(outfile, delimiter=';')
+            writer.writerow(['Date', 'Open', 'High', 'Low', 'Close', 'Predicted Median Price', 'Predicted Close'])
+            resultM = 0.0
+            resultC = 0.0
+            args = deque([])
+            errsum = 0.0
+            numtries = 0
+            for row in reader:
+                date = row[0]
+                op = float(row[2]) * 0.5
+                hi = float(row[3]) * 0.5
+                lo = float(row[4]) * 0.5
+                cl = float(row[5]) * 0.5
+                vol = float(row[6])
+                if resultM != 0.0 or resultC != 0.0:
+                    writer.writerow([date, op*2.0, hi*2.0, lo*2.0, cl*2.0, resultM*2.0, resultC*2.0])
+                    target = (hi+lo+cl)/3.0
+                    #error = netC.getError([target])
+                    netM.learn([target])
+                    #netC.learn([cl])
+                    numtries += 1
+                    errsum += (resultM - target)**2
+                    print resultM - target, math.sqrt(errsum/numtries)
+                    #print numtries
             
-            args.append(hi)
-            args.append(lo)
-            args.append(cl)
+                args.append(hi)
+                args.append(lo)
+                args.append(cl)
             
-            while len(args) > inputs:
-                args.popleft()
-            if len(args) == inputs:
-                resultM = netM.step(args)[0]
-                #resultC = netC.step(args)[0]
+                while len(args) > inputs:
+                    args.popleft()
+                if len(args) == inputs:
+                    resultM = netM.step(args)[0]
+                    #resultC = netC.step(args)[0]
 
-            if maxtries != 0 and numtries >= maxtries:
-                break
+                if maxtries != 0 and numtries >= maxtries:
+                    break
 
-t2 = time.clock()
-print round(t2-t1, 3)            
+    t2 = time.clock()
+    print round(t2-t1, 3)            
+
+cProfile.run('trainNet()')
+

@@ -1,6 +1,6 @@
 #comments assume unfamiliarity with Python 2.7, and can obviously be removed
 
-import math, random, os
+import math, random, os, threading
 class LSTM_g:
 
 #the activation function used is the logistic sigmoid, with range (0, 1) and a neat derivative
@@ -318,6 +318,7 @@ class LSTM_g:
         for j in range(nonOutputs, self.numUnits):
             errorResp[j] = targets[j - nonOutputs] - self.activation[j]
 
+        sortedGater = sorted(self.gater)
 #error responsibilities are calculated in the reverse order of activation
         for j in reversed(range(self.numInputs, nonOutputs)):
 
@@ -330,12 +331,11 @@ class LSTM_g:
                 if (k, j) in self.trace:
                     errorProj[j] += errorResp[k] * self.oldGain[k, j] * self.weight[k, j]
 
-
             errorProj[j] *= self.actFunc(self.oldState[j], True)
 
 #summation in Eq. 22, looping through G_j (Eq. 20) and making sure no k is repeated
             lastK = 0
-            for k, a in sorted(self.gater):
+            for k, a in sortedGater:
                 if lastK < k and j < k and j == self.gater[k, a]:
                     lastK = k
                     errorResp[j] += errorResp[k] * self.theTerm(j, k)
