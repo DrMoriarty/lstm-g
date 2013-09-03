@@ -77,7 +77,7 @@ def trainNet():
     inputs = 60
     memBlocks = inputs*2+1
     stochPeriod = 5
-    maxtries =  10
+    maxtries =  0
     specList = []
     specList.append("%d, 1, 1, 1" % inputs)
     for memoryBlock in range(memBlocks):
@@ -139,6 +139,10 @@ def trainNet():
 
     t2 = time.clock()
     print round(t2-t1, 3)            
+
+    f = open('trained.net', 'w+')
+    f.write(netM.toString(False))
+    f.close()
 
 cProfile.run('trainNet()')
 
