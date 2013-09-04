@@ -45,6 +45,19 @@ class LSTM_g:
                 term += self.weight[k, a] * self.oldActivation[k, a]
         return term
 
+#zeros states, activations, traces, and extended traces
+    def clear(self):
+        for j, i in self.weight:
+
+#traces are unneeded for self-connections
+            if j != i:
+                self.state[j] = self.activation[j] = self.trace[j, i] = 0
+
+#the combinations of j, i, and k that extended traces are defined for are deduced from connections
+                for k, a in self.gater:
+                    if j < k and j == self.gater[k, a]:
+                        self.extendedTrace[j, i, k] = 0
+
 #manual building takes a list of lists of string parameters, otherwise in the format in the readme
     def build(self, specData):
 
@@ -80,25 +93,14 @@ class LSTM_g:
                 if args[3] != "-1":
                     self.gater[a0, a1] = int(args[3])
 
-#traces are unneeded for self-connections, and are initially 0
-#these will be overwritten if traces are specified
-                if a0 != a1:
-                    self.trace[a0, a1] = 0
-
             elif largs > 3:
                 self.extendedTrace[a0, a1, int(args[2])] = float(args[3])
             elif largs > 2:
                 self.trace[a0, a1] = float(args[2])
 
-#if the optional lines were omitted, states, activations, and extended traces are initially 0
+#if the optional lines were omitted, states, activations, traces, and extended traces start zeroed
         if newNetwork:
-            for j, i in self.trace:
-                self.state[j] = self.activation[j] = 0
-
-#the combinations of j, i, and k that extended traces are defined for are deduced from connections
-                for (k, a), j2 in self.gater.iteritems():
-                    if j < k and j == j2:
-                        self.extendedTrace[j, i, k] = 0
+            self.clear()
 
 #units start from 0, so the number of units is one more than the state dictionary's largest key
         self.numUnits = max(self.state) + 1
@@ -151,7 +153,7 @@ class LSTM_g:
 #blockData is a list of lists, but max gives the list with the largest first entry
         numUnits = numInputs + 4 * max(blockData)[0] + 4 + numOutputs
 
-#the first two parameters in the high-level list's first line make the low-level list's first line
+#the low-level list's first line is the first two parameters in the high-level list's first line
 #[:] prevents the creation of a local copy instead
         specData[:] = [specData[0][:2]]
 
@@ -254,7 +256,10 @@ class LSTM_g:
 #given a list of input values, does a forward pass and returns a list of output unit activations
 #calculates states (and activations from those) in the order of activation, while caching values
 #cached values are used in trace, extended trace, and responsibility calculations
-    def step(self, inputs):
+#if clearValues is True, states, activations, traces, and extended traces are first reset to zero
+    def step(self, inputs, clearValues):
+        if clearValues:
+            self.clear()
 
 #input unit activations come directly from inputs
         for j in xrange(self.numInputs):
